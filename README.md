@@ -1,6 +1,6 @@
 # Accessing a MySQL database using Skupper
 
-[![main](https://github.com/skupperproject/REPO/actions/workflows/main.yaml/badge.svg)](https://github.com/skupperproject/REPO/actions/workflows/main.yaml)
+[![main](https://github.com/skupperproject/skupper-example-mysql/actions/workflows/main.yaml/badge.svg)](https://github.com/skupperproject/skupper-example-mysql/actions/workflows/main.yaml)
 
 #### Use public cloud resources to process data from an on-prem database
 
@@ -25,7 +25,7 @@ across cloud providers, data centers, and edge sites.
 * [Step 6: Link your namespaces](#step-6-link-your-namespaces)
 * [Step 7: Deploy the database server](#step-7-deploy-the-database-server)
 * [Step 8: Expose the database server](#step-8-expose-the-database-server)
-* [Step 9: Run CLIENT](#step-9-run-client)
+* [Step 9: Run the database client](#step-9-run-the-database-client)
 * [Accessing the web console](#accessing-the-web-console)
 * [Cleaning up](#cleaning-up)
 
@@ -37,7 +37,7 @@ internet.
 
 It contains two services:
 
-* A MySQL database running in a private data center.
+* A MySQL server running in a private data center.
 
 * A MySQL client running in the public cloud.
 
@@ -330,9 +330,9 @@ NAME       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
 database   ClusterIP   10.100.58.95   <none>        3306/TCP   2s
 ~~~
 
-## Step 9: Run CLIENT
+## Step 9: Run the database client
 
-In the public namespace, use `kubectl run` to run CLIENT.
+In the public namespace, use `kubectl run` to run the client.
 
 _**Console for public:**_
 
