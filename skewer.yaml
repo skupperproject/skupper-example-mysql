@@ -3,7 +3,7 @@
 
 title: Accessing a MySQL database using Skupper
 subtitle: Use public cloud resources to process data from an on-prem database
-github_actions_url: https://github.com/skupperproject/REPO/actions/workflows/main.yaml
+github_actions_url: https://github.com/skupperproject/skupper-example-mysql/actions/workflows/main.yaml
 overview: |
   This example shows how you can use Skupper to access a MySQL
   database at a remote site without exposing it to the public
@@ -11,7 +11,7 @@ overview: |
 
   It contains two services:
 
-  * A MySQL database running in a private data center.
+  * A MySQL server running in a private data center.
 
   * A MySQL client running in the public cloud.
 
@@ -58,9 +58,9 @@ steps:
           output: |
             NAME       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
             database   ClusterIP   10.100.58.95   <none>        3306/TCP   2s
-  - title: Run CLIENT
+  - title: Run the database client
     preamble: |
-      In the public namespace, use `kubectl run` to run CLIENT.
+      In the public namespace, use `kubectl run` to run the client.
     commands:
       public:
         - await: service/database
