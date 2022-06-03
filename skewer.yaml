@@ -1,8 +1,22 @@
-title: Accessing SERVER using Skupper
-subtitle: Use public cloud resources to process data from a private SERVER
+# podman run --net host --rm -p 3306:3306 --name some-mysql -e MYSQL_ROOT_PASSWORD=secret docker.io/library/mysql:latest
+# pdoman run -it --net host --rm docker.io/library/mysql mysql -h0.0.0.0 -uroot -psecret -e"select 1;"
+
+title: Accessing a MySQL database using Skupper
+subtitle: Use public cloud resources to process data from an on-prem database
 github_actions_url: https://github.com/skupperproject/REPO/actions/workflows/main.yaml
 overview: |
-  This example shows how you can use Skupper to access SERVER.
+  This example shows how you can use Skupper to access a MySQL
+  database at a remote site without exposing it to the public
+  internet.
+
+  It contains two services:
+
+  * A MySQL database running in a private data center.
+
+  * A MySQL client running in the public cloud.
+
+  The example uses two Kubernetes namespaces, "private" and "public",
+  to represent the private data center and public cloud.
 sites:
   public:
     kubeconfig: ~/.kube/config-public
@@ -17,47 +31,51 @@ steps:
   - standard: install_skupper_in_your_namespaces
   - standard: check_the_status_of_your_namespaces
   - standard: link_your_namespaces
-  - title: Deploy SERVER
+  - title: Deploy the database server
     preamble: |
       In the private namespace, use the `kubectl apply` command to
-      install the server.
+      install the MySQL database server.
     commands:
       private:
-        - run: kubectl apply -f server
-          output: deployment.apps/server created
-  - title: Expose SERVER
+        - run: kubectl apply -f database
+          output: deployment.apps/database created
+  - title: Expose the database server
     preamble: |
-      In the private namespace, use `skupper expose` to expose SERVER
-      on the Skupper network.
+      In the private namespace, use `skupper expose` to expose the
+      database server on the Skupper network.
 
-      Then, in the public namespace, use `kubectl get service/server`
-      to check that the service appears after a moment.
+      Then, in the public namespace, use `kubectl get
+      service/database` to check that the `database` service appears
+      after a moment.
     commands:
       private:
-        - await: deployment/server
-        - run: skupper expose deployment/server --port 8080 --target-port 80
+        - await: deployment/database
+        - run: skupper expose deployment/database --port 3306
           output: deployment server exposed as server
       public:
-        - await: service/server
-        - run: kubectl get service/server
+        - await: service/database
+        - run: kubectl get service/database
           output: |
-            NAME     TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
-            server   ClusterIP   10.100.58.95   <none>        5672/TCP   2s
+            NAME       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+            database   ClusterIP   10.100.58.95   <none>        3306/TCP   2s
   - title: Run CLIENT
     preamble: |
       In the public namespace, use `kubectl run` to run CLIENT.
     commands:
       public:
-        - await: service/server
-        - run: kubectl run client --attach --rm --image=docker.io/curlimages/curl --restart=Never -- -sf http://server:8080/
+        - await: service/database
+        - run: for i in {1..90}; do if kubectl run client --attach --rm --image docker.io/library/mysql --restart Never --env MYSQL_PWD=secret -- mysql -h database -u root -e "select 1" >/dev/null; then break; else sleep 2; fi; done
+          apply: test
+        - run: kubectl run client --attach --rm --image docker.io/library/mysql --restart Never --env MYSQL_PWD=secret -- mysql -h database -u root -e "select 1"
           output: |
-            OUTPUT
+            1
+            1
             pod "client" deleted
   - standard: accessing_the_web_console
   - standard: cleaning_up
     commands:
       private:
-        - run: kubectl delete -f server
+        - run: kubectl delete -f database
         - run: skupper delete
       public:
         - run: skupper delete

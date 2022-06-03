@@ -1,8 +1,8 @@
-# Accessing SERVER using Skupper
+# Accessing a MySQL database using Skupper
 
 [![main](https://github.com/skupperproject/REPO/actions/workflows/main.yaml/badge.svg)](https://github.com/skupperproject/REPO/actions/workflows/main.yaml)
 
-#### Use public cloud resources to process data from a private message broker
+#### Use public cloud resources to process data from an on-prem database
 
 
 This example is part of a [suite of examples][examples] showing the
@@ -23,15 +23,26 @@ across cloud providers, data centers, and edge sites.
 * [Step 4: Install Skupper in your namespaces](#step-4-install-skupper-in-your-namespaces)
 * [Step 5: Check the status of your namespaces](#step-5-check-the-status-of-your-namespaces)
 * [Step 6: Link your namespaces](#step-6-link-your-namespaces)
-* [Step 7: Deploy SERVER](#step-7-deploy-server)
-* [Step 8: Expose SERVER](#step-8-expose-server)
+* [Step 7: Deploy the database server](#step-7-deploy-the-database-server)
+* [Step 8: Expose the database server](#step-8-expose-the-database-server)
 * [Step 9: Run CLIENT](#step-9-run-client)
 * [Accessing the web console](#accessing-the-web-console)
 * [Cleaning up](#cleaning-up)
 
 ## Overview
 
-This example shows how you can use Skupper to access SERVER.
+This example shows how you can use Skupper to access a MySQL
+database at a remote site without exposing it to the public
+internet.
+
+It contains two services:
+
+* A MySQL database running in a private data center.
+
+* A MySQL client running in the public cloud.
+
+The example uses two Kubernetes namespaces, "private" and "public",
+to represent the private data center and public cloud.
 
 ## Prerequisites
 
@@ -265,57 +276,58 @@ to use `sftp` or a similar tool to transfer the token securely.
 By default, tokens expire after a single use or 15 minutes after
 creation.
 
-## Step 7: Deploy SERVER
+## Step 7: Deploy the database server
 
 In the private namespace, use the `kubectl apply` command to
-install the server.
+install the MySQL database server.
 
 _**Console for private:**_
 
 ~~~ shell
-kubectl apply -f server
+kubectl apply -f database
 ~~~
 
 _Sample output:_
 
 ~~~ console
-$ kubectl apply -f server
-deployment.apps/server created
+$ kubectl apply -f database
+deployment.apps/database created
 ~~~
 
-## Step 8: Expose SERVER
+## Step 8: Expose the database server
 
-In the private namespace, use `skupper expose` to expose SERVER
-on the Skupper network.
+In the private namespace, use `skupper expose` to expose the
+database server on the Skupper network.
 
-Then, in the public namespace, use `kubectl get service/server`
-to check that the service appears after a moment.
+Then, in the public namespace, use `kubectl get
+service/database` to check that the `database` service appears
+after a moment.
 
 _**Console for private:**_
 
 ~~~ shell
-skupper expose deployment/server --port 8080
+skupper expose deployment/database --port 3306
 ~~~
 
 _Sample output:_
 
 ~~~ console
-$ skupper expose deployment/server --port 8080
+$ skupper expose deployment/database --port 3306
 deployment server exposed as server
 ~~~
 
 _**Console for public:**_
 
 ~~~ shell
-kubectl get service/server
+kubectl get service/database
 ~~~
 
 _Sample output:_
 
 ~~~ console
-$ kubectl get service/server
-NAME     TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
-broker   ClusterIP   10.100.58.95   <none>        5672/TCP   2s
+$ kubectl get service/database
+NAME       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+database   ClusterIP   10.100.58.95   <none>        3306/TCP   2s
 ~~~
 
 ## Step 9: Run CLIENT
@@ -325,14 +337,15 @@ In the public namespace, use `kubectl run` to run CLIENT.
 _**Console for public:**_
 
 ~~~ shell
-kubectl run client --attach --rm --image=docker.io/curlimages/curl --restart=Never -- -s http://server:8080/
+kubectl run client --attach --rm --image docker.io/library/mysql --restart Never --env MYSQL_PWD=secret -- mysql -h database -u root -e "select 1"
 ~~~
 
 _Sample output:_
 
 ~~~ console
-$ kubectl run client --attach --rm --image=docker.io/curlimages/curl --restart=Never -- -s http://server:8080/
-OUTPUT
+$ kubectl run client --attach --rm --image docker.io/library/mysql --restart Never --env MYSQL_PWD=secret -- mysql -h database -u root -e "select 1"
+1
+1
 pod "client" deleted
 ~~~
 
@@ -378,7 +391,7 @@ the following commands.
 _**Console for private:**_
 
 ~~~ shell
-kubectl delete -f server
+kubectl delete -f database
 skupper delete
 ~~~
 
