@@ -1,8 +1,8 @@
-# Accessing a MySQL database using Skupper
+# Skupper Hello World
 
-[![main](https://github.com/skupperproject/skupper-example-mysql/actions/workflows/main.yaml/badge.svg)](https://github.com/skupperproject/skupper-example-mysql/actions/workflows/main.yaml)
+[![main](https://github.com/skupperproject/skewer/actions/workflows/main.yaml/badge.svg)](https://github.com/skupperproject/skewer/actions/workflows/main.yaml)
 
-#### Use public cloud resources to process data from an on-prem database
+#### A minimal HTTP application deployed across Kubernetes clusters using Skupper
 
 This example is part of a [suite of examples][examples] showing the
 different ways you can use [Skupper][website] to connect services
@@ -17,11 +17,12 @@ across cloud providers, data centers, and edge sites.
 * [Prerequisites](#prerequisites)
 * [Step 1: Install the Skupper command-line tool](#step-1-install-the-skupper-command-line-tool)
 * [Step 2: Set up your namespaces](#step-2-set-up-your-namespaces)
-* [Step 3: Deploy the database server](#step-3-deploy-the-database-server)
+* [Step 3: Deploy the frontend and backend](#step-3-deploy-the-frontend-and-backend)
 * [Step 4: Create your sites](#step-4-create-your-sites)
 * [Step 5: Link your sites](#step-5-link-your-sites)
-* [Step 6: Expose the database server](#step-6-expose-the-database-server)
-* [Step 7: Run the database client](#step-7-run-the-database-client)
+* [Step 6: Fail on demand](#step-6-fail-on-demand)
+* [Step 7: Expose the backend](#step-7-expose-the-backend)
+* [Step 8: Access the frontend](#step-8-access-the-frontend)
 * [Cleaning up](#cleaning-up)
 * [Summary](#summary)
 * [Next steps](#next-steps)
@@ -29,29 +30,11 @@ across cloud providers, data centers, and edge sites.
 
 ## Overview
 
-This example shows how you can use Skupper to access a MySQL
-database at a remote site without exposing it to the public
-internet.
-
-It contains two services:
-
-* A MySQL server running in a private data center.
-
-* A MySQL client running in the public cloud.
-
-The example uses two Kubernetes namespaces, "private" and "public",
-to represent the private data center and public cloud.
+An overview
 
 ## Prerequisites
 
-* The `kubectl` command-line tool, version 1.15 or later
-  ([installation guide][install-kubectl])
-
-* Access to at least one Kubernetes cluster, from [any provider you
-  choose][kube-providers]
-
-[install-kubectl]: https://kubernetes.io/docs/tasks/tools/install-kubectl/
-[kube-providers]: https://skupper.io/start/kubernetes.html
+Some prerequisites
 
 ## Step 1: Install the Skupper command-line tool
 
@@ -107,40 +90,43 @@ documentation for yours:
 * [IBM Kubernetes Service](https://skupper.io/start/ibmks.html#cluster-access)
 * [OpenShift](https://skupper.io/start/openshift.html#cluster-access)
 
-_**Public:**_
+_**West:**_
 
 ~~~ shell
-export KUBECONFIG=~/.kube/config-public
+export KUBECONFIG=~/.kube/config-west
 # Enter your provider-specific login command
-kubectl create namespace public
-kubectl config set-context --current --namespace public
+kubectl create namespace west
+kubectl config set-context --current --namespace west
 ~~~
 
-_**Private:**_
+_**East:**_
 
 ~~~ shell
-export KUBECONFIG=~/.kube/config-private
+export KUBECONFIG=~/.kube/config-east
 # Enter your provider-specific login command
-kubectl create namespace private
-kubectl config set-context --current --namespace private
+kubectl create namespace east
+kubectl config set-context --current --namespace east
 ~~~
 
-## Step 3: Deploy the database server
+## Step 3: Deploy the frontend and backend
 
-In the private namespace, use the `kubectl apply` command to
-install the MySQL database server.
+This example runs the frontend and the backend in separate
+Kubernetes namespaces, on different clusters.
 
-_**Private:**_
+Use `kubectl create deployment` to deploy the frontend in
+namespace `west` and the backend in namespace
+`east`.
+
+_**West:**_
 
 ~~~ shell
-kubectl apply -f database
+kubectl create deployment frontend --image quay.io/skupper/hello-world-frontend
 ~~~
 
-_Sample output:_
+_**East:**_
 
-~~~ console
-$ kubectl apply -f database
-deployment.apps/database created
+~~~ shell
+kubectl create deployment backend --image quay.io/skupper/hello-world-backend --replicas 3
 ~~~
 
 ## Step 4: Create your sites
@@ -159,7 +145,7 @@ tunnel][minikube-tunnel] before you run `skupper init`.
 
 [minikube-tunnel]: https://skupper.io/start/minikube.html#running-minikube-tunnel
 
-_**Public:**_
+_**West:**_
 
 ~~~ shell
 skupper init
@@ -172,13 +158,13 @@ _Sample output:_
 $ skupper init
 Waiting for LoadBalancer IP or hostname...
 Waiting for status...
-Skupper is now installed in namespace 'public'.  Use 'skupper status' to get more information.
+Skupper is now installed in namespace 'west'.  Use 'skupper status' to get more information.
 
 $ skupper status
-Skupper is enabled for namespace "public". It is not connected to any other sites. It has no exposed services.
+Skupper is enabled for namespace "west". It is not connected to any other sites. It has no exposed services.
 ~~~
 
-_**Private:**_
+_**East:**_
 
 ~~~ shell
 skupper init
@@ -191,10 +177,10 @@ _Sample output:_
 $ skupper init
 Waiting for LoadBalancer IP or hostname...
 Waiting for status...
-Skupper is now installed in namespace 'private'.  Use 'skupper status' to get more information.
+Skupper is now installed in namespace 'east'.  Use 'skupper status' to get more information.
 
 $ skupper status
-Skupper is enabled for namespace "private". It is not connected to any other sites. It has no exposed services.
+Skupper is enabled for namespace "east". It is not connected to any other sites. It has no exposed services.
 ~~~
 
 As you move through the steps below, you can use `skupper status` at
@@ -203,8 +189,6 @@ any time to check your progress.
 ## Step 5: Link your sites
 
 A Skupper _link_ is a channel for communication between two sites.
-Links serve as a transport for application connections and
-requests.
 
 Creating a link requires use of two `skupper` commands in
 conjunction, `skupper token create` and `skupper link create`.
@@ -219,11 +203,11 @@ that generated it.
 token can link to your site.  Make sure that only those you trust
 have access to it.
 
-First, use `skupper token create` in site Public to generate the
-token.  Then, use `skupper link create` in site Private to link
+First, use `skupper token create` in site West to generate the
+token.  Then, use `skupper link create` in site East to link
 the sites.
 
-_**Public:**_
+_**West:**_
 
 ~~~ shell
 skupper token create ~/secret.token
@@ -236,7 +220,7 @@ $ skupper token create ~/secret.token
 Token written to ~/secret.token
 ~~~
 
-_**Private:**_
+_**East:**_
 
 ~~~ shell
 skupper link create ~/secret.token
@@ -246,7 +230,7 @@ _Sample output:_
 
 ~~~ console
 $ skupper link create ~/secret.token
-Site configured to link to https://10.105.193.154:8081/ed9c37f6-d78a-11ec-a8c7-04421a4c5042 (name=link1)
+Site configured to link to <endpoint> (name=link1)
 Check the status of the link using 'skupper link status'.
 ~~~
 
@@ -255,81 +239,108 @@ to use `scp` or a similar tool to transfer the token securely.  By
 default, tokens expire after a single use or 15 minutes after
 creation.
 
-## Step 6: Expose the database server
+## Step 6: Fail on demand
 
-In Private, use `skupper expose` to expose the database server
-on the application network.
-
-Then, in Public, use `kubectl get service/database` to check
-that the `database` service appears after a moment.
-
-_**Private:**_
+_**West:**_
 
 ~~~ shell
-skupper expose deployment/database --port 3306
+if [ -n "${SKEWER_FAIL}" ]; then expr 1 / 0; fi
+
+~~~
+
+## Step 7: Expose the backend
+
+We now have our sites linked to form a Skupper network, but no
+services are exposed on it.  Skupper uses the `skupper expose`
+command to select a service from one site for exposure in all the
+linked sites.
+
+Use `skupper expose` to expose the backend service in East to
+the frontend in West.
+
+_**East:**_
+
+~~~ shell
+skupper expose deployment/backend --port 8080
 ~~~
 
 _Sample output:_
 
 ~~~ console
-$ skupper expose deployment/database --port 3306
-deployment server exposed as server
+$ skupper expose deployment/backend --port 8080
+deployment backend exposed as backend
 ~~~
 
-_**Public:**_
+## Step 8: Access the frontend
+
+In order to use and test the application, we need external access
+to the frontend.
+
+Use `kubectl expose` with `--type LoadBalancer` to open network
+access to the frontend service.
+
+Once the frontend is exposed, use `kubectl get service/frontend`
+to look up the external IP of the frontend service.  If the
+external IP is `<pending>`, try again after a moment.
+
+Once you have the external IP, use `curl` or a similar tool to
+request the `/api/health` endpoint at that address.
+
+**Note:** The `<external-ip>` field in the following commands is a
+placeholder.  The actual value is an IP address.
+
+_**West:**_
 
 ~~~ shell
-kubectl get service/database
+kubectl expose deployment/frontend --port 8080 --type LoadBalancer
+kubectl get service/frontend
+curl http://<external-ip>:8080/api/health
 ~~~
 
 _Sample output:_
 
 ~~~ console
-$ kubectl get service/database
-NAME       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
-database   ClusterIP   10.100.58.95   <none>        3306/TCP   2s
+$ kubectl expose deployment/frontend --port 8080 --type LoadBalancer
+service/frontend exposed
+
+$ kubectl get service/frontend
+NAME       TYPE           CLUSTER-IP      EXTERNAL-IP     PORT(S)          AGE
+frontend   LoadBalancer   10.103.232.28   <external-ip>   8080:30407/TCP   15s
+
+$ curl http://<external-ip>:8080/api/health
+OK
 ~~~
 
-## Step 7: Run the database client
-
-In the public namespace, use `kubectl run` to run the client.
-
-_**Public:**_
-
-~~~ shell
-kubectl run client --attach --rm --image docker.io/library/mysql --restart Never --env MYSQL_PWD=secret -- mysql -h database -u root -e "select 1"
-~~~
-
-_Sample output:_
-
-~~~ console
-$ kubectl run client --attach --rm --image docker.io/library/mysql --restart Never --env MYSQL_PWD=secret -- mysql -h database -u root -e "select 1"
-1
-1
-pod "client" deleted
-~~~
+If everything is in order, you can now access the web interface by
+navigating to `http://<external-ip>:8080/` in your browser.
 
 ## Cleaning up
 
 To remove Skupper and the other resources from this exercise, use
-the following commands.
+the following commands:
 
-_**Private:**_
-
-~~~ shell
-kubectl delete -f database
-skupper delete
-~~~
-
-_**Public:**_
+_**West:**_
 
 ~~~ shell
 skupper delete
+kubectl delete service/frontend
+kubectl delete deployment/frontend
 ~~~
+
+_**East:**_
+
+~~~ shell
+skupper delete
+kubectl delete deployment/backend
+~~~
+
+## Summary
+
+A summary
 
 ## Next steps
 
-Check out the other [examples][examples] on the Skupper website.
+Some next steps
 
 ## About this example
 

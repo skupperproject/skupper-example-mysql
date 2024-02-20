@@ -1,9 +1,5 @@
-# podman run --net host --rm -p 3306:3306 --name some-mysql -e MYSQL_ROOT_PASSWORD=secret docker.io/library/mysql:latest
-# pdoman run -it --net host --rm docker.io/library/mysql mysql -h0.0.0.0 -uroot -psecret -e"select 1;"
-
 title: Accessing a MySQL database using Skupper
 subtitle: Use public cloud resources to process data from an on-prem database
-github_actions_url: https://github.com/skupperproject/skupper-example-mysql/actions/workflows/main.yaml
 overview: |
   This example shows how you can use Skupper to access a MySQL
   database at a remote site without exposing it to the public
@@ -19,18 +15,20 @@ overview: |
   to represent the private data center and public cloud.
 sites:
   public:
-    kubeconfig: ~/.kube/config-public
+    title: Public
+    platform: kubernetes
     namespace: public
+    env:
+      KUBECONFIG: ~/.kube/config-public
   private:
-    kubeconfig: ~/.kube/config-private
+    title: Private
+    platform: kubernetes
     namespace: private
+    env:
+      KUBECONFIG: ~/.kube/config-private
 steps:
-  - standard: configure_separate_console_sessions
-  - standard: access_your_clusters
-  - standard: set_up_your_namespaces
-  - standard: install_skupper_in_your_namespaces
-  - standard: check_the_status_of_your_namespaces
-  - standard: link_your_namespaces
+  - standard: install_the_skupper_command_line_tool
+  - standard: kubernetes/set_up_your_namespaces
   - title: Deploy the database server
     preamble: |
       In the private namespace, use the `kubectl apply` command to
@@ -39,21 +37,22 @@ steps:
       private:
         - run: kubectl apply -f database
           output: deployment.apps/database created
+  - standard: kubernetes/create_your_sites
+  - standard: kubernetes/link_your_sites
   - title: Expose the database server
     preamble: |
-      In the private namespace, use `skupper expose` to expose the
-      database server on the Skupper network.
+      In Private, use `skupper expose` to expose the database server
+      on the application network.
 
-      Then, in the public namespace, use `kubectl get
-      service/database` to check that the `database` service appears
-      after a moment.
+      Then, in Public, use `kubectl get service/database` to check
+      that the `database` service appears after a moment.
     commands:
       private:
-        - await: deployment/database
+        - await_resource: deployment/database
         - run: skupper expose deployment/database --port 3306
           output: deployment server exposed as server
       public:
-        - await: service/database
+        - await_resource: service/database
         - run: kubectl get service/database
           output: |
             NAME       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
@@ -63,7 +62,7 @@ steps:
       In the public namespace, use `kubectl run` to run the client.
     commands:
       public:
-        - await: service/database
+        - await_resource: service/database
         - run: for i in {1..90}; do sleep 2; if kubectl run client --attach --rm --image docker.io/library/mysql --restart Never --env MYSQL_PWD=secret -- mysql -h database -u root -e "select 1" >/dev/null; then break; fi; done
           apply: test
         - run: kubectl run client --attach --rm --image docker.io/library/mysql --restart Never --env MYSQL_PWD=secret -- mysql -h database -u root -e "select 1"
@@ -71,7 +70,6 @@ steps:
             1
             1
             pod "client" deleted
-  - standard: accessing_the_web_console
   - standard: cleaning_up
     commands:
       private:
